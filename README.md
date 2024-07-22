@@ -13,12 +13,12 @@ TODO: Will be for the generic use of the system.
 ### ven (virtual ethernet)
 A version of the system for experimenting on virtual ethernet pairs.
 
+### en-en (ethernet-ethernet)
+A version of the system for ethernet-ethernet connection between 2 PCs.
+
 ## The Reliable Communication System
-First of all, please note that this system is not stabilized yet. But here is the current description of how the system works:
 
-- The proposed system has 4 components and 2 headers. For comparison, 2 additional components in userspace exist.
-
-### Proposed System
+### Proposed System: the *Main* Version that is Utilizing eBPF
 
 #### most important Meta-Parameters
 - **pts**: how many bytes of file is embedded inside a packet
@@ -42,28 +42,33 @@ First of all, please note that this system is not stabilized yet. But here is th
 - varying testing environments such as virtual ethernet pairs, cable connection of 2 computers, 2 virtual machines, wireless local communication, IP communication of 2 remote computers
 
 #### Components
-The components are explained in steps 1,2,3,4... Follow them for easier understanding of each packet. 
+The components are explained in steps 1,2,3,4... Follow them for easier understanding of each path. 
 ##### Sender
-###### Userspace Program
+###### Userspace Program (SU.c)
 ##### 1
 Creates a array in memory each byte of whom is a random 8bit value. Then creates a packet buffer and fills it with data that will not change over packets. Sends the file in packets defined as:
 < frame | packet indice | data >
-The sizes vary according to parameters of the experiment -and the program. (goto **2**)
-###### eBPF.XDP Program
+The sizes vary according to parameters of the experiment -and the program. (goto **2**) Then enters a loop iterations of whose are as follows:
+1. Check if any Ack or Nack packet has come.
+##### 5
+2. If a Ack packet has come; set the packet indice as acknowledged.
+##### 6
+3. If a NACK packet has come; unset the packet indice if it has been set as acknowledged.
+3. Then traverse the packets to see if any non-acknowledged packet remains, if so, goto 1. Else, the transfer has been finished.
+
+###### eBPF.XDP Program (SKI.c)
 ##### 4
 Receives a cumulative Ack packet or a NACK packet.
-- Cumulative ack packets are sent as individual ack packets to the userspace program thru a eBPF ring buffer. (goto **to be cont...**)
+- Cumulative ack packets are sent as individual ack packets to the userspace program thru a eBPF ring buffer. (goto **5**)
+- NACK packets are sent as-is to the userspace thru the same eBPF ring buffer. (goto **6**)
+
 ##### Receiver
-###### eBPF.XDP Program
+###### eBPF.XDP Program (RK.c)
 ##### 2
-If the packet is interested, first delivers the packet to the userspace using eBPF ring buffers. (goto **3**) Then if cumulative Ack count is reached, manipulates the packet so that the packet is a cumulative Ack packet. Using XDP_TX, sends the ack packet to the sender. (goto **4**)
-###### Userspace Program
+If the packet is interested, first delivers the packet to the userspace using eBPF ring buffers. (goto **3**) Then if cumulative Ack count is reached, manipulates the packet so that the packet becomes a cumulative Ack packet. Using XDP_TX, sends the ack packet to the sender. (goto **4**)
+###### Userspace Program (RU.c)
 ##### 3
-Receives packets from ring buffer. Sometimes the ring buffer sends partial information of a packet. So the size of the ring buffer is not enough. If it detects this, sends a NACK message to the sender for the specific packet. (goto **to be continued...**)
+Receives packets from ring buffer. Sometimes the ring buffer sends partial information of a packet. So the size of the ring buffer is not enough. If it detects this, sends a NACK message to the sender for the specific packet. (goto **4**) Else, stores the packet.
 
-
-
-After sending each portion (From now omn, _portion_ means the portion of the file that a single packet holds.)
-
-- 4 components for the proposed system are 2 pairs for sender and receiver, each having a kernel-space eBPF.XDP program and a user-space program for obvious reasons.
-- The sender's userspace program puts 
+### Proposed System: a Version that is Not Utilizing eBPF
+To be continued...
